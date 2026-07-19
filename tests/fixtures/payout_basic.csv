@@ -1,0 +1,5 @@
+ref,gross_amount,fee,net_amount,currency,date
+ord_1,10.00,0.59,9.41,EUR,2026-07-01
+ord_2,25.00,0.95,24.05,EUR,2026-07-01
+ord_3,40.00,1.30,38.70,EUR,2026-07-01
+ord_ghost,5.00,0.44,4.56,EUR,2026-07-01
