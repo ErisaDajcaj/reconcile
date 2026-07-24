@@ -28,7 +28,13 @@ def _rows(path):
     path = Path(path)
     with path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
-        header = set(reader.fieldnames or [])
+        fieldnames = reader.fieldnames or []
+        seen: set[str] = set()
+        for name in fieldnames:
+            if name in seen:
+                raise CsvSchemaError(f"{path}: duplicate column header {name!r}")
+            seen.add(name)
+        header = set(fieldnames)
         yield header, path
         for row in reader:
             yield row, path

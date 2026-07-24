@@ -9,6 +9,7 @@ from reconcile.ingest import (
     infer_mapping,
     load_orders,
     load_payouts,
+    read_headers,
 )
 from reconcile.llm import FakeLLMClient, LLMError
 from reconcile.parse import ORDER_COLUMNS, PAYOUT_COLUMNS
@@ -327,6 +328,29 @@ def test_load_payouts_maps_then_parses_deterministically(tmp_path):
 def test_load_payouts_on_canonical_headers_needs_no_client():
     rows = load_payouts(FIXTURES / "payout_basic.csv")
     assert [r.ref for r in rows] == ["ord_1", "ord_2", "ord_3", "ord_ghost"]
+
+
+def test_read_headers_rejects_a_duplicate_column_name(tmp_path):
+    path = tmp_path / "dup.csv"
+    path.write_text(
+        "ref,gross_amount,fee,net_amount,currency,date,fee\n"
+        "pay_1,10.00,0.59,9.41,EUR,2026-07-01,0.59\n"
+    )
+    with pytest.raises(MappingError, match="'fee'"):
+        read_headers(path)
+
+
+def test_load_payouts_rejects_a_duplicate_source_column_even_on_the_short_circuit(tmp_path):
+    """A repeated header name must fail closed even when the canonical set is a
+    subset of the (duplicated) headers -- otherwise csv.DictReader silently
+    reads the field from the wrong (last) column."""
+    path = tmp_path / "dup.csv"
+    path.write_text(
+        "ref,gross_amount,fee,net_amount,currency,date,fee\n"
+        "pay_1,10.00,0.59,9.41,EUR,2026-07-01,0.59\n"
+    )
+    with pytest.raises(MappingError, match="'fee'"):
+        load_payouts(path)
 
 
 def test_payout_fee_and_net_amount_mapped_to_same_header_rejects_the_whole_job():

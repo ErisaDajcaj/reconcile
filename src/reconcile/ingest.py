@@ -2,7 +2,7 @@
 
 The model is asked exactly one question per file -- "which source header feeds
 which canonical field?" -- and answers with header names only. It never sees a
-task where it could produce a number.
+task where it could produce a monetary number.
 """
 
 import csv
@@ -135,7 +135,13 @@ def infer_mapping(
 
 def read_headers(path) -> list[str]:
     with Path(path).open(newline="", encoding="utf-8") as fh:
-        return next(csv.reader(fh), [])
+        headers = next(csv.reader(fh), [])
+    seen: set[str] = set()
+    for header in headers:
+        if header in seen:
+            raise MappingError(f"{path}: duplicate column header {header!r}")
+        seen.add(header)
+    return headers
 
 
 def load_payouts(path, client: LLMClient | None = None) -> list[PayoutLine]:

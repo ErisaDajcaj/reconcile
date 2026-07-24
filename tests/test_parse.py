@@ -74,6 +74,18 @@ def test_mapping_pointing_at_a_missing_column_fails_closed(tmp_path):
         parse_orders(raw, mapping)
 
 
+def test_duplicate_header_fails_closed(tmp_path):
+    """A repeated header name must be rejected, not silently collapsed by
+    csv.DictReader (which keeps the last column's value for a repeated key)."""
+    bad = tmp_path / "dup.csv"
+    bad.write_text(
+        "order_id,amount,currency,date,amount\n"
+        "ord_1,10.00,EUR,2026-07-01,10.00\n"
+    )
+    with pytest.raises(CsvSchemaError, match="'amount'"):
+        parse_orders(bad)
+
+
 def test_identity_mapping_names_every_field_after_itself():
     mapping = identity_mapping({"order_id", "amount"})
     assert mapping.fields == {"order_id": "order_id", "amount": "amount"}
