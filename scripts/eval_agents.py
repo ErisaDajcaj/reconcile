@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Live model-quality eval, deliberately OUTSIDE the CI gate.
 
 Model calls are non-deterministic and cost money, so they must never decide

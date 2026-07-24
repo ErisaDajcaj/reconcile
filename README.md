@@ -11,7 +11,7 @@ _"Reconcile" is a provisional working name (see `docs/design/`)._
 Plan 2 (this milestone): the deterministic core from Plan 1, plus two LLM agents —
 an ingest agent that maps arbitrary CSV headers onto the canonical schema, and a
 matcher agent that proposes fuzzy pairings over the residual the exact-match pass
-could not reconcile. Neither agent ever handles a monetary value, and **no fuzzy
+could not reconcile. The matcher sees monetary values but never outputs or recomputes them; the ingest agent sees only header names, never data values. **No fuzzy
 match is auto-confirmed**: proposals go to a human-review queue. Promotion (the
 fail-closed verifier), the web UI, and deploy follow in later plans.
 See `docs/design/2026-07-20-plan-2-agent-layer-design.md`.
