@@ -25,7 +25,9 @@ _SYSTEM = (
     "Every header you return must be one of the source headers, copied verbatim. "
     "Never invent a header, never read or interpret data values, never return a "
     "number you computed. If a required field has no plausible source header, "
-    "leave it out and lower your confidence."
+    "leave it out and lower your confidence. "
+    "`confidence` is a number on a 0.0-1.0 scale (0.0 = no confidence, "
+    "1.0 = certain), never a percentage or any other scale."
 )
 
 
@@ -92,18 +94,34 @@ def infer_mapping(
     confidence = out.get("confidence")
     if not isinstance(pairs, list) or not _is_number(confidence):
         raise MappingError(f"malformed mapping response: {out!r}")
+    if not 0.0 <= confidence <= 1.0:
+        raise MappingError(f"mapping confidence {confidence} outside valid range [0.0, 1.0]")
     if confidence < min_confidence:
         raise MappingError(
             f"mapping confidence {confidence} below threshold {min_confidence}"
         )
 
     fields: dict[str, str] = {}
+    seen_headers: dict[str, str] = {}
     for pair in pairs:
         if not isinstance(pair, dict):
             continue
         field, header = pair.get("field"), pair.get("header")
-        if field in target and header in headers:
-            fields.setdefault(field, header)
+        if not isinstance(field, str) or not isinstance(header, str):
+            raise MappingError(f"malformed mapping pair: {pair!r}")
+        if field not in target:
+            continue
+        if header not in headers:
+            raise MappingError(f"mapping references unknown header: {header!r}")
+        if field in fields:
+            raise MappingError(f"field mapped more than once: {field!r}")
+        if header in seen_headers:
+            raise MappingError(
+                f"header {header!r} mapped to more than one field: "
+                f"{seen_headers[header]!r} and {field!r}"
+            )
+        fields[field] = header
+        seen_headers[header] = field
 
     missing = sorted(target - fields.keys())
     if missing:
