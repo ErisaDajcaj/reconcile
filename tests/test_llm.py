@@ -64,8 +64,10 @@ class _StubMessages:
     def __init__(self, *, response=None, error=None):
         self._response = response
         self._error = error
+        self.create_kwargs = None  # Capture kwargs for assertion
 
     def create(self, **kwargs):
+        self.create_kwargs = kwargs
         if self._error is not None:
             raise self._error
         return self._response
@@ -113,5 +115,26 @@ def test_structured_wraps_sdk_exceptions_in_llmerror():
 def test_structured_happy_path_returns_the_parsed_dict():
     payload = {"mapping": [], "confidence": 0.9}
     response = _Response([_Block("text", text=json.dumps(payload))])
-    adapter = _adapter(_StubSDKClient(response=response))
-    assert adapter.structured(system="s", user="u", schema={}) == payload
+    stub_client = _StubSDKClient(response=response)
+    adapter = _adapter(stub_client, model="test-model")
+    test_schema = {"type": "object", "properties": {"key": {"type": "string"}}}
+    result = adapter.structured(system="s", user="u", schema=test_schema)
+    assert result == payload
+    # Verify the adapter sends the expected parameters to the SDK client
+    assert stub_client.messages.create_kwargs is not None
+    assert stub_client.messages.create_kwargs["model"] == "test-model"
+    assert stub_client.messages.create_kwargs["max_tokens"] == llm_module.MAX_TOKENS
+    assert stub_client.messages.create_kwargs["system"] == "s"
+    assert stub_client.messages.create_kwargs["messages"] == [{"role": "user", "content": "u"}]
+    assert stub_client.messages.create_kwargs["output_config"] == {
+        "format": {"type": "json_schema", "schema": test_schema}
+    }
+
+
+def test_structured_wraps_malformed_response_object_in_llmerror():
+    """A response with unexpected shape (bad .content) becomes LLMError, not AttributeError."""
+    # Response object that has no .content attribute
+    bad_response = object()
+    adapter = _adapter(_StubSDKClient(response=bad_response))
+    with pytest.raises(LLMError, match="request to the API failed"):
+        adapter.structured(system="s", user="u", schema={})

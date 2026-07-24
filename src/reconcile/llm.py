@@ -66,6 +66,9 @@ class AnthropicClient:
         # connection errors, rate limits, HTTP status errors, whatever comes
         # next -- must become an `LLMError` here, or a caller (and eventually
         # a package consumer) would need `import anthropic` to handle it.
+        # Response-shape handling is also inside the guard: if the SDK returns
+        # a differently-shaped object (AttributeError on .content, etc.), that
+        # also converts to LLMError.
         try:
             response = self._client.messages.create(
                 model=self._model,
@@ -74,15 +77,17 @@ class AnthropicClient:
                 messages=[{"role": "user", "content": user}],
                 output_config={"format": {"type": "json_schema", "schema": schema}},
             )
+            text = next((b.text for b in response.content if b.type == "text"), None)
+            if text is None:
+                raise LLMError(f"{self._model}: response carried no text block")
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise LLMError(f"{self._model}: response was not valid JSON") from exc
+            if not isinstance(payload, dict):
+                raise LLMError(f"{self._model}: response JSON was not an object")
+            return payload
+        except LLMError:
+            raise  # Re-raise our own LLMError as-is
         except Exception as exc:
             raise LLMError(f"{self._model}: request to the API failed: {exc}") from exc
-        text = next((b.text for b in response.content if b.type == "text"), None)
-        if text is None:
-            raise LLMError(f"{self._model}: response carried no text block")
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise LLMError(f"{self._model}: response was not valid JSON") from exc
-        if not isinstance(payload, dict):
-            raise LLMError(f"{self._model}: response JSON was not an object")
-        return payload
