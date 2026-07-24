@@ -19,3 +19,10 @@ class OrderLine:
     amount: Decimal
     currency: str
     order_date: date
+
+
+@dataclass(frozen=True)
+class ColumnMapping:
+    """Canonical field name -> source CSV header. The dict is treated as read-only."""
+
+    fields: dict[str, str]

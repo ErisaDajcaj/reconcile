@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from reconcile.schema import PayoutLine, OrderLine
 
 
@@ -31,3 +33,14 @@ def test_order_line_holds_decimal_amount():
     )
     assert o.amount == Decimal("10.00")
     assert isinstance(o.amount, Decimal)
+
+
+def test_column_mapping_is_frozen():
+    from dataclasses import FrozenInstanceError
+
+    from reconcile.schema import ColumnMapping
+
+    mapping = ColumnMapping(fields={"order_id": "Order Reference"})
+    assert mapping.fields["order_id"] == "Order Reference"
+    with pytest.raises(FrozenInstanceError):
+        mapping.fields = {}
