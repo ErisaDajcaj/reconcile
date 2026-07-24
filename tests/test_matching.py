@@ -51,3 +51,10 @@ def test_each_payout_consumed_at_most_once_idempotent():
     again = deterministic_match(orders, payouts)
     assert (len(again.matched), len(again.unmatched_orders), len(again.unmatched_payouts)) == \
            (len(report.matched), len(report.unmatched_orders), len(report.unmatched_payouts))
+
+
+def test_report_starts_with_an_empty_review_queue():
+    from reconcile.matching import ReconcileReport
+
+    report = ReconcileReport()
+    assert report.needs_review == []
