@@ -73,6 +73,37 @@ def test_non_integer_index_is_dropped():
     assert propose_matches(ORDERS, PAYOUTS, FakeLLMClient([_proposal(order_index="0")])) == []
 
 
+def test_boolean_order_index_is_dropped():
+    """`isinstance(True, int)` is True in Python -- `_is_index` exists specifically
+    to reject `True`/`False` masquerading as `0`/`1`."""
+    assert propose_matches(ORDERS, PAYOUTS, FakeLLMClient([_proposal(order_index=True)])) == []
+
+
+def test_boolean_payout_index_is_dropped():
+    assert propose_matches(ORDERS, PAYOUTS, FakeLLMClient([_proposal(payout_index=False)])) == []
+
+
+def test_boolean_confidence_is_dropped():
+    """`isinstance(True, (int, float))` is also True -- `_is_number` must reject it."""
+    assert propose_matches(ORDERS, PAYOUTS, FakeLLMClient([_proposal(confidence=True)])) == []
+
+
+def test_non_dict_entry_in_proposals_is_dropped_others_kept():
+    payload = {
+        "proposals": [
+            "not a dict",
+            {"order_index": 0, "payout_index": 0, "confidence": 0.9, "rationale": "a", "kind": "fee_offset"},
+        ]
+    }
+    candidates = propose_matches(ORDERS, PAYOUTS, FakeLLMClient([payload]))
+    assert [c.order.order_id for c in candidates] == ["ord_fee"]
+
+
+def test_confidence_boundary_zero_and_one_are_accepted():
+    assert len(propose_matches(ORDERS, PAYOUTS, FakeLLMClient([_proposal(confidence=0.0)]))) == 1
+    assert len(propose_matches(ORDERS, PAYOUTS, FakeLLMClient([_proposal(confidence=1.0)]))) == 1
+
+
 def test_a_line_is_proposed_at_most_once():
     payload = {
         "proposals": [
