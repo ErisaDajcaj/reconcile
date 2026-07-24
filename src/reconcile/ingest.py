@@ -69,6 +69,9 @@ def infer_mapping(
     *,
     min_confidence: float = MIN_MAPPING_CONFIDENCE,
 ) -> ColumnMapping:
+    if not 0.0 <= min_confidence <= 1.0:
+        raise ValueError(f"min_confidence {min_confidence!r} outside valid range [0.0, 1.0]")
+
     headers = list(headers)
     target = set(target_fields)
 
@@ -83,7 +86,8 @@ def infer_mapping(
 
     user = (
         "Canonical fields: " + ", ".join(sorted(target)) + "\n"
-        "Source headers: " + ", ".join(headers)
+        "Source headers (one per line, verbatim):\n"
+        + "\n".join(repr(h) for h in headers)
     )
     try:
         out = client.structured(system=_SYSTEM, user=user, schema=_mapping_schema(target))
@@ -105,12 +109,12 @@ def infer_mapping(
     seen_headers: dict[str, str] = {}
     for pair in pairs:
         if not isinstance(pair, dict):
-            continue
+            raise MappingError(f"malformed mapping pair: {pair!r}")
         field, header = pair.get("field"), pair.get("header")
         if not isinstance(field, str) or not isinstance(header, str):
             raise MappingError(f"malformed mapping pair: {pair!r}")
         if field not in target:
-            continue
+            raise MappingError(f"malformed mapping pair: {pair!r}")
         if header not in headers:
             raise MappingError(f"mapping references unknown header: {header!r}")
         if field in fields:

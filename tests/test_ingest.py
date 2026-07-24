@@ -112,9 +112,52 @@ def test_hallucinated_header_is_rejected_even_with_a_valid_pair_for_the_same_fie
         infer_mapping(RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([invented]))
 
 
-def test_malformed_agent_response_rejects_the_whole_job():
+def test_malformed_mapping_type_rejects_the_whole_job():
     with pytest.raises(MappingError, match="malformed"):
-        infer_mapping(RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([{"mapping": "nope"}]))
+        infer_mapping(
+            RAW_HEADERS,
+            ORDER_COLUMNS,
+            FakeLLMClient([{"mapping": "nope", "confidence": 0.99}]),
+        )
+
+
+def test_malformed_confidence_type_rejects_the_whole_job():
+    with pytest.raises(MappingError, match="malformed"):
+        infer_mapping(
+            RAW_HEADERS,
+            ORDER_COLUMNS,
+            FakeLLMClient([{"mapping": GOOD_MAPPING["mapping"], "confidence": "high"}]),
+        )
+
+
+def test_non_dict_mapping_item_rejects_the_whole_job():
+    malformed = {
+        "mapping": [
+            "nope",
+            {"field": "order_id", "header": "Order Reference"},
+            {"field": "amount", "header": "Total (EUR)"},
+            {"field": "currency", "header": "Currency Code"},
+            {"field": "date", "header": "Placed On"},
+        ],
+        "confidence": 0.99,
+    }
+    with pytest.raises(MappingError, match="malformed mapping pair"):
+        infer_mapping(RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([malformed]))
+
+
+def test_out_of_schema_field_name_rejects_the_whole_job():
+    malformed = {
+        "mapping": [
+            {"field": "amuont", "header": "Total (EUR)"},
+            {"field": "order_id", "header": "Order Reference"},
+            {"field": "amount", "header": "Total (EUR)"},
+            {"field": "currency", "header": "Currency Code"},
+            {"field": "date", "header": "Placed On"},
+        ],
+        "confidence": 0.99,
+    }
+    with pytest.raises(MappingError, match="malformed mapping pair"):
+        infer_mapping(RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([malformed]))
 
 
 def test_llm_error_becomes_a_mapping_error():
@@ -221,6 +264,34 @@ def test_confidence_exactly_at_threshold_is_accepted():
     at_threshold = dict(GOOD_MAPPING, confidence=MIN_MAPPING_CONFIDENCE)
     mapping = infer_mapping(RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([at_threshold]))
     assert mapping.fields["order_id"] == "Order Reference"
+
+
+def test_min_mapping_confidence_constant_is_pinned():
+    assert MIN_MAPPING_CONFIDENCE == 0.9
+
+
+def test_min_confidence_override_above_one_rejects():
+    with pytest.raises(ValueError, match="range"):
+        infer_mapping(
+            RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([GOOD_MAPPING]), min_confidence=1.5
+        )
+
+
+def test_min_confidence_override_below_zero_rejects():
+    with pytest.raises(ValueError, match="range"):
+        infer_mapping(
+            RAW_HEADERS, ORDER_COLUMNS, FakeLLMClient([GOOD_MAPPING]), min_confidence=-0.01
+        )
+
+
+def test_min_confidence_override_nan_rejects():
+    with pytest.raises(ValueError, match="range"):
+        infer_mapping(
+            RAW_HEADERS,
+            ORDER_COLUMNS,
+            FakeLLMClient([GOOD_MAPPING]),
+            min_confidence=float("nan"),
+        )
 
 
 def test_min_confidence_override_takes_effect():
