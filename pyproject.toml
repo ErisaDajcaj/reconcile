@@ -3,9 +3,10 @@ name = "reconcile"
 version = "0.1.0"
 description = "Agentic reconciliation & verification for Stripe payouts (deterministic core)"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = []                       # the safety layer needs nothing at runtime
 
 [project.optional-dependencies]
+llm = ["anthropic>=0.119"]              # the agents are optional; the guardrails are not
 dev = ["pytest>=8.0"]
 
 [build-system]
