@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from .matcher import CandidateMatch
 from .schema import PayoutLine, OrderLine
 
 
@@ -8,6 +9,9 @@ class ReconcileReport:
     matched: list[tuple[OrderLine, PayoutLine]] = field(default_factory=list)
     unmatched_orders: list[OrderLine] = field(default_factory=list)
     unmatched_payouts: list[PayoutLine] = field(default_factory=list)
+    # Candidate pairings over the residual. Never auto-confirmed: promoting one
+    # into `matched` is the Plan 3 verifier's job.
+    needs_review: list[CandidateMatch] = field(default_factory=list)
 
 
 def _key(order_id: str, amount, currency: str) -> tuple:
