@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 
-from .matcher import CandidateMatch
-from .schema import PayoutLine, OrderLine
+from .schema import CandidateMatch, PayoutLine, OrderLine
 
 
 @dataclass

@@ -6,10 +6,8 @@ objects and drops anything it cannot fully validate. Nothing here is confirmed -
 every proposal lands in the human-review queue.
 """
 
-from dataclasses import dataclass
-
 from .llm import LLMClient, LLMError
-from .schema import OrderLine, PayoutLine
+from .schema import CandidateMatch, OrderLine, PayoutLine
 
 KINDS = ("fee_offset", "partial_refund", "currency_rounding", "other")
 
@@ -52,15 +50,6 @@ _PROPOSAL_SCHEMA = {
     "required": ["proposals"],
     "additionalProperties": False,
 }
-
-
-@dataclass(frozen=True)
-class CandidateMatch:
-    order: OrderLine
-    payout: PayoutLine
-    confidence: float
-    rationale: str
-    kind: str
 
 
 def _render(orders: list[OrderLine], payouts: list[PayoutLine]) -> str:
