@@ -61,13 +61,21 @@ class AnthropicClient:
         self._model = model
 
     def structured(self, *, system: str, user: str, schema: dict) -> dict:
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=MAX_TOKENS,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            output_config={"format": {"type": "json_schema", "schema": schema}},
-        )
+        # Broad on purpose: this call is the one place a vendor exception type
+        # could enter the system. Every failure the SDK can raise --
+        # connection errors, rate limits, HTTP status errors, whatever comes
+        # next -- must become an `LLMError` here, or a caller (and eventually
+        # a package consumer) would need `import anthropic` to handle it.
+        try:
+            response = self._client.messages.create(
+                model=self._model,
+                max_tokens=MAX_TOKENS,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                output_config={"format": {"type": "json_schema", "schema": schema}},
+            )
+        except Exception as exc:
+            raise LLMError(f"{self._model}: request to the API failed: {exc}") from exc
         text = next((b.text for b in response.content if b.type == "text"), None)
         if text is None:
             raise LLMError(f"{self._model}: response carried no text block")
