@@ -36,3 +36,8 @@ def test_candidates_land_in_needs_review_and_never_in_matched():
     assert len(report.needs_review) == 1
     assert report.needs_review[0].order.order_id == "ord_missing"
     assert report.needs_review[0].payout.ref == "ord_ghost"
+
+    # Verify that candidates land in needs_review as an overlay on the residual,
+    # not a filter — proposed pairs must remain in the residual lists.
+    assert [o.order_id for o in report.unmatched_orders] == ["ord_missing"]
+    assert [p.ref for p in report.unmatched_payouts] == ["ord_ghost"]
