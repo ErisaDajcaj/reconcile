@@ -75,3 +75,58 @@ def test_a_real_api_failure_still_yields_a_complete_report():
     assert [o.order_id for o in report.unmatched_orders] == ["ord_missing"]
     assert [p.ref for p in report.unmatched_payouts] == ["ord_ghost"]
     assert report.needs_review == []
+
+
+# -- Ingest agent genuinely invoked: non-canonical headers on the orders side. --
+# Every other fixture in this file has canonical headers, so `infer_mapping`'s
+# deterministic short-circuit fires and the ingest agent is never called --
+# a regression in call ordering, or in `ingest_client = client` defaulting,
+# would pass every other test here. Pairs the raw-header orders fixture
+# (exercises ingest mapping) with the canonical fuzzy payouts fixture (so the
+# payout side still short-circuits and the residual lands on the matcher).
+
+RAW_HEADER_ORDERS = "tests/fixtures/orders_fuzzy_raw_headers.csv"
+FUZZY_PAYOUTS = "tests/fixtures/payout_fuzzy.csv"
+
+_ORDER_MAPPING = {
+    "mapping": [
+        {"field": "order_id", "header": "Order Reference"},
+        {"field": "amount", "header": "Total (EUR)"},
+        {"field": "currency", "header": "Currency Code"},
+        {"field": "date", "header": "Placed On"},
+    ],
+    "confidence": 0.97,
+}
+
+_PROPOSALS = {
+    "proposals": [
+        {"order_index": 0, "payout_index": 0, "confidence": 0.94,
+         "rationale": "order records the net, payout the gross", "kind": "fee_offset"},
+        {"order_index": 1, "payout_index": 1, "confidence": 0.81,
+         "rationale": "payout is smaller by a plausible partial refund", "kind": "partial_refund"},
+        {"order_index": 2, "payout_index": 2, "confidence": 0.88,
+         "rationale": "amounts differ by one rounding step", "kind": "currency_rounding"},
+    ]
+}
+
+
+def test_ingest_agent_is_actually_invoked_for_non_canonical_headers():
+    client = FakeLLMClient([_ORDER_MAPPING, _PROPOSALS])
+    report = reconcile_files(FUZZY_PAYOUTS, RAW_HEADER_ORDERS, client=client)
+
+    # Both agents were called, in pipeline order: ingest maps headers before
+    # anything else runs, then the matcher proposes over the residual.
+    assert len(client.calls) == 2
+    assert "mapping" in client.calls[0]["schema"]["properties"]
+    assert "proposals" in client.calls[1]["schema"]["properties"]
+
+    # The mapping was actually used: order ids came from the mapped header,
+    # not a raw/failed parse, and the deterministic pass ran on real values.
+    assert report.matched == []  # order ids (ord_*) never equal payout refs (py_*)
+    assert sorted(o.order_id for o in report.unmatched_orders) == [
+        "ord_alone", "ord_fee", "ord_refund", "ord_round",
+    ]
+    assert sorted(p.ref for p in report.unmatched_payouts) == ["py_1", "py_2", "py_3", "py_4"]
+
+    proposed = {(c.order.order_id, c.payout.ref) for c in report.needs_review}
+    assert proposed == {("ord_fee", "py_1"), ("ord_refund", "py_2"), ("ord_round", "py_3")}
