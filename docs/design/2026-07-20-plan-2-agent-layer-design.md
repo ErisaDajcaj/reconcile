@@ -21,9 +21,11 @@ The LLM enters in exactly two places and nowhere else:
 1. **Ingest:** infer the *mapping* from arbitrary CSV headers to the canonical schema.
 2. **Matcher:** propose *fuzzy pairings* over the residual left by the deterministic pass.
 
-The LLM never touches a monetary value, never parses a number, and is never the gate.
-Deterministic code coerces values (`Decimal`/`date`), validates references, and assembles
-the report. This is the architect behaviour: knowing where **not** to put the model.
+The matcher does see monetary values — but only after deterministic code has already
+parsed them into `Decimal` (§3.3). The LLM never parses a raw value into a number, never
+emits or recomputes one, and is never the gate. Deterministic code coerces values
+(`Decimal`/`date`), validates references, and assembles the report. This is the architect
+behaviour: knowing where **not** to put the model.
 
 ## 3. Components
 

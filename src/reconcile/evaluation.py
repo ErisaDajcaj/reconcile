@@ -28,9 +28,12 @@ def evaluate(report: ReconcileReport, truth: list[dict]) -> EvalMetrics:
 def candidate_recall(report: ReconcileReport, fuzzy_truth: list[dict]) -> float:
     """Share of true fuzzy pairs surfaced in `needs_review`.
 
-    Deliberately measured, never gated: it scores model quality, which is
-    non-deterministic and costs money. The CI gate stays on `evaluate`, which
-    scores auto-confirmed matches only.
+    CI does assert this metric's value, but only against `FakeLLMClient` --
+    that gates the *metric implementation* against a deterministic fake, not
+    model quality. It never gates a merge on how good the real model is: that
+    would require live model calls, which are non-deterministic and cost
+    money, and stays confined to `scripts/eval_agents.py`. The CI merge gate
+    is `evaluate`, which scores auto-confirmed (deterministic-only) matches.
     """
     surfaced = {(c.order.order_id, c.payout.ref) for c in report.needs_review}
     truth = {(t["order_id"], t["payout_ref"]) for t in fuzzy_truth}
