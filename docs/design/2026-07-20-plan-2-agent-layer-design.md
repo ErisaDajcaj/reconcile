@@ -64,8 +64,8 @@ ever installing `anthropic`.
 - `propose_matches(unmatched_orders, unmatched_payouts, client) -> list[CandidateMatch]`,
   run over the **residual** from `deterministic_match`.
 - `@dataclass(frozen=True) CandidateMatch(order: OrderLine, payout: PayoutLine,
-  confidence: float, rationale: str, kind: str)` where
-  `kind ∈ {fee_offset, partial_refund, currency_rounding, other}`.
+  confidence: float, rationale: str, kind: str)` (defined in `src/reconcile/schema.py` to avoid
+  layering inversion) where `kind ∈ {fee_offset, partial_refund, currency_rounding, other}`.
 - **Money-safety:** the agent reasons over already-typed lines (`Decimal`) and **references
   lines by index** — it never emits an amount. Code resolves indices back to the real
   line objects and validates they exist.
