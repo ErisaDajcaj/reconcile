@@ -28,12 +28,14 @@ orders.csv ─┘    fails closed)         (pure code, hash-join)  (exact only)
                                                           confidence+reason)   auto-confirmed)
                                                                                     │
                                                             [Plan 3] verifier ──────┘
-                                                            — not built yet —
+                                                                (built)
 ```
 
-Everything down to `needs_review` is shipped. The verifier that could *promote* a
-proposal out of the review queue is Plan 3: until it exists, a fuzzy proposal has
-exactly one exit, and it is a human.
+Everything down to `needs_review` is shipped. The verifier that promotes proposals
+out of the review queue is Plan 3: a fuzzy candidate is promoted only when a
+deterministic arithmetic predicate holds and an independent verifier LLM (blind to
+the matcher's reasoning) agrees on the kind above threshold; otherwise it stays in
+review.
 
 ## Status — building in public
 
@@ -41,12 +43,13 @@ exactly one exit, and it is a human.
 |---|---|---|
 | **Plan 1** | Deterministic exact-match core + eval harness in CI | ✅ **shipped** |
 | **Plan 2** | LLM ingest agent + fuzzy matcher agent, behind a vendor-neutral seam | ✅ **shipped** |
-| Plan 3 | Independent fail-closed verifier (the only path out of `needs_review`) | designed |
+| Plan 3 | Independent fail-closed verifier (the only path out of `needs_review`) | ✅ **shipped** |
 | Plan 4 | Web UI + deployed URL | designed |
 | Plan 5 | Per-job observability (traces, cost, latency, match-rate) | designed |
 
 Design docs: [Plan 1 architecture](docs/design/2026-07-19-reconcile-design.md) ·
-[Plan 2 agent layer](docs/design/2026-07-20-plan-2-agent-layer-design.md). Plans land
+[Plan 2 agent layer](docs/design/2026-07-20-plan-2-agent-layer-design.md) ·
+[Plan 3 verifier](docs/design/2026-07-30-plan-3-verifier-design.md). Plans land
 incrementally, each behind a green eval gate.
 
 ## What's actually enforced

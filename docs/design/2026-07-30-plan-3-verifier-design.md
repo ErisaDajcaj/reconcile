@@ -1,6 +1,6 @@
 # Plan 3 — Verifier + refund corroboration · Design Spec
 
-> **Status:** approved for planning · **Date:** 2026-07-30 · **Author:** Erisa Dajcaj (with StepUp)
+> **Status:** implemented · **Date:** 2026-07-30 · **Author:** Erisa Dajcaj (with StepUp)
 > **Builds on:** [`2026-07-19-reconcile-design.md`](2026-07-19-reconcile-design.md) §5 (pipeline), §7 (verifier semantics), §8 (eval); [`2026-07-20-plan-2-agent-layer-design.md`](2026-07-20-plan-2-agent-layer-design.md) (ingest + matcher). This spec details step 4 — the verifier — the gate that promotes a fuzzy candidate to a confirmed match. Plan 2 deliberately left every fuzzy candidate in `needs_review`; this plan builds the only thing allowed to move one out.
 
 ---
