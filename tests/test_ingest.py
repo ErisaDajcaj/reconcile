@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -367,3 +368,37 @@ def test_payout_fee_and_net_amount_mapped_to_same_header_rejects_the_whole_job()
     }
     with pytest.raises(MappingError, match="more than one field"):
         infer_mapping(RAW_PAYOUT_HEADERS, PAYOUT_COLUMNS, FakeLLMClient([collided]))
+
+
+def test_load_refunds_canonical_headers_no_model_call(tmp_path):
+    from reconcile.ingest import load_refunds
+    from reconcile.schema import RefundLine
+
+    p = tmp_path / "refunds.csv"
+    p.write_text("ref,amount,currency,date\nord_refund,12.00,EUR,2026-07-02\n", encoding="utf-8")
+    client = FakeLLMClient([])
+    refunds = load_refunds(p, client)
+    assert refunds == [RefundLine(ref="ord_refund", amount=Decimal("12.00"),
+                                  currency="EUR", refund_date=date(2026, 7, 2))]
+    assert client.calls == []  # canonical headers short-circuit the model
+
+
+def test_load_refunds_maps_non_canonical_headers(tmp_path):
+    from reconcile.ingest import load_refunds
+    from reconcile.schema import RefundLine
+
+    p = tmp_path / "refunds_raw.csv"
+    p.write_text("refund_ref,refund_value,ccy,refunded_on\nord_refund,12.00,EUR,2026-07-02\n", encoding="utf-8")
+    client = FakeLLMClient([{
+        "mapping": [
+            {"field": "ref", "header": "refund_ref"},
+            {"field": "amount", "header": "refund_value"},
+            {"field": "currency", "header": "ccy"},
+            {"field": "date", "header": "refunded_on"},
+        ],
+        "confidence": 0.98,
+    }])
+    refunds = load_refunds(p, client)
+    assert refunds[0].ref == "ord_refund"
+    assert refunds[0].amount == Decimal("12.00")
+    assert len(client.calls) == 1

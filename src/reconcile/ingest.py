@@ -12,11 +12,13 @@ from .llm import LLMClient, LLMError
 from .parse import (
     ORDER_COLUMNS,
     PAYOUT_COLUMNS,
+    REFUND_COLUMNS,
     identity_mapping,
     parse_orders,
     parse_payouts,
+    parse_refunds,
 )
-from .schema import ColumnMapping, OrderLine, PayoutLine
+from .schema import ColumnMapping, OrderLine, PayoutLine, RefundLine
 
 MIN_MAPPING_CONFIDENCE = 0.9
 
@@ -152,3 +154,8 @@ def load_payouts(path, client: LLMClient | None = None) -> list[PayoutLine]:
 def load_orders(path, client: LLMClient | None = None) -> list[OrderLine]:
     mapping = infer_mapping(read_headers(path), ORDER_COLUMNS, client)
     return parse_orders(path, mapping)
+
+
+def load_refunds(path, client: LLMClient | None = None) -> list[RefundLine]:
+    mapping = infer_mapping(read_headers(path), REFUND_COLUMNS, client)
+    return parse_refunds(path, mapping)
