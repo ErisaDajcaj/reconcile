@@ -68,3 +68,32 @@ def test_different_currency_never_holds():
 
 def test_other_is_never_promotable():
     assert ARITH["other"](_order("o", "1.00"), _payout("p", "1.00", "0", "1.00"), []) is False
+
+
+def test_currency_rounding_at_exact_epsilon_boundary():
+    # Delta exactly equals ROUNDING_EPSILON (0.02) — boundary is inclusive.
+    # order.amount = 49.98, payout.gross_amount = 50.00, delta = 0.02
+    assert ARITH["currency_rounding"](_order("o", "49.98"), _payout("p", "50.00", "1.75", "48.25"), []) is True
+
+
+def test_currency_rounding_rejects_mismatched_currency():
+    # Currency mismatch guard: even if delta is within epsilon, should reject.
+    order = _order("o", "49.99", currency="USD")
+    payout = _payout("p", "50.00", "1.75", "48.25", currency="EUR")
+    assert ARITH["currency_rounding"](order, payout, []) is False
+
+
+def test_partial_refund_rejects_mismatched_currency_between_order_and_payout():
+    # Order is EUR, payout is USD — should reject regardless of refund.
+    order = _order("ord_refund", "30.00", currency="EUR")
+    payout = _payout("py_2", "18.00", "0.82", "17.18", currency="USD")
+    refunds = [RefundLine(ref="ord_refund", amount=Decimal("12.00"), currency="EUR", refund_date=date(2026, 7, 2))]
+    assert ARITH["partial_refund"](order, payout, refunds) is False
+
+
+def test_partial_refund_rejects_mismatched_refund_currency():
+    # Refund currency (USD) doesn't match order currency (EUR) — should reject.
+    order = _order("ord_refund", "30.00", currency="EUR")
+    payout = _payout("py_2", "18.00", "0.82", "17.18", currency="EUR")
+    refunds = [RefundLine(ref="ord_refund", amount=Decimal("12.00"), currency="USD", refund_date=date(2026, 7, 2))]
+    assert ARITH["partial_refund"](order, payout, refunds) is False
