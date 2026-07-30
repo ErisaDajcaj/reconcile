@@ -1,9 +1,13 @@
 import json
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from reconcile.core import reconcile_files
-from reconcile.evaluation import evaluate, candidate_recall, EvalMetrics
+from reconcile.evaluation import evaluate, candidate_recall, verified_metrics, EvalMetrics
 from reconcile.llm import FakeLLMClient
+from reconcile.matching import ReconcileReport
+from reconcile.schema import OrderLine, PayoutLine, VerifiedMatch
 
 PAYOUTS = "tests/fixtures/payout_basic.csv"
 ORDERS = "tests/fixtures/orders_basic.csv"
@@ -90,3 +94,32 @@ def test_candidate_recall_ignores_proposals_outside_the_ground_truth():
     report = reconcile_files(FUZZY_PAYOUTS, FUZZY_ORDERS, client=FakeLLMClient([distractor]))
     assert len(report.needs_review) == 1
     assert candidate_recall(report, _fuzzy_truth()) == 0.0
+
+
+def _vm(order_id, ref, kind="fee_offset"):
+    order = OrderLine(order_id=order_id, amount=Decimal("1"), currency="EUR", order_date=date(2026, 7, 2))
+    payout = PayoutLine(ref=ref, gross_amount=Decimal("1"), fee=Decimal("0"),
+                        net_amount=Decimal("1"), currency="EUR", line_date=date(2026, 7, 2))
+    return VerifiedMatch(order=order, payout=payout, kind=kind, matcher_confidence=0.9,
+                         verifier_confidence=0.95, deterministic_check=kind, rationale="x")
+
+
+def test_verified_metrics_all_correct_is_perfect():
+    report = ReconcileReport(verified=[_vm("ord_fee", "py_1")])
+    truth = [{"order_id": "ord_fee", "payout_ref": "py_1", "kind": "fee_offset"}]
+    m = verified_metrics(report, truth)
+    assert m == EvalMetrics(precision=1.0, recall=1.0, false_match_rate=0.0)
+
+
+def test_verified_metrics_flags_a_wrong_promotion():
+    report = ReconcileReport(verified=[_vm("ord_x", "py_wrong")])
+    truth = [{"order_id": "ord_fee", "payout_ref": "py_1", "kind": "fee_offset"}]
+    m = verified_metrics(report, truth)
+    assert m.precision == 0.0
+    assert m.false_match_rate == 1.0
+
+
+def test_verified_metrics_empty_report_is_vacuously_clean():
+    m = verified_metrics(ReconcileReport(), [])
+    assert m.false_match_rate == 0.0
+    assert m.precision == 1.0
