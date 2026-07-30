@@ -2,8 +2,8 @@ from datetime import date
 from decimal import Decimal
 
 from reconcile.llm import FakeLLMClient, LLMError
-from reconcile.schema import OrderLine, PayoutLine, RefundLine
-from reconcile.verifier import ARITH, ROUNDING_EPSILON, VERIFIER_THRESHOLD, classify
+from reconcile.schema import CandidateMatch, OrderLine, PayoutLine, RefundLine, VerifiedMatch
+from reconcile.verifier import ARITH, ROUNDING_EPSILON, VERIFIER_THRESHOLD, classify, promote
 
 
 def _order(order_id, amount, currency="EUR"):
@@ -127,3 +127,97 @@ def test_classify_rejects_unknown_kind():
 def test_classify_rejects_out_of_range_confidence():
     assert classify(_order("o", "1"), _payout("p", "1", "0", "1"), [],
                     FakeLLMClient([{"kind": "fee_offset", "confidence": 1.4}])) is None
+
+
+def _candidate(order, payout, kind, confidence=0.91):
+    return CandidateMatch(order=order, payout=payout, confidence=confidence,
+                          rationale="matcher said so", kind=kind)
+
+
+FEE_ORDER = _order("ord_fee", "97.10")
+FEE_PAYOUT = _payout("py_1", "100.00", "2.90", "97.10")
+
+
+def test_promotes_when_arithmetic_and_verifier_agree():
+    cand = _candidate(FEE_ORDER, FEE_PAYOUT, "fee_offset")
+    client = FakeLLMClient([{"kind": "fee_offset", "confidence": 0.95}])
+    verified, remaining = promote([cand], [], client)
+    assert remaining == []
+    assert len(verified) == 1
+    v = verified[0]
+    assert isinstance(v, VerifiedMatch)
+    assert v.kind == "fee_offset"
+    assert v.matcher_confidence == 0.91
+    assert v.verifier_confidence == 0.95
+    assert v.deterministic_check == "fee_offset"
+
+
+def test_rejects_when_arithmetic_fails_without_calling_the_model():
+    # gross-fee != net -> predicate false -> no LLM call
+    bad_payout = _payout("py_1", "100.00", "3.00", "97.10")
+    cand = _candidate(FEE_ORDER, bad_payout, "fee_offset")
+    client = FakeLLMClient([])  # would raise if called
+    verified, remaining = promote([cand], [], client)
+    assert verified == []
+    assert remaining == [cand]
+    assert client.calls == []
+
+
+def test_rejects_when_verifier_disagrees_on_kind():
+    cand = _candidate(FEE_ORDER, FEE_PAYOUT, "fee_offset")
+    client = FakeLLMClient([{"kind": "currency_rounding", "confidence": 0.99}])
+    verified, remaining = promote([cand], [], client)
+    assert verified == []
+    assert remaining == [cand]
+
+
+def test_rejects_when_verifier_below_threshold():
+    cand = _candidate(FEE_ORDER, FEE_PAYOUT, "fee_offset")
+    client = FakeLLMClient([{"kind": "fee_offset", "confidence": 0.5}])
+    verified, remaining = promote([cand], [], client)
+    assert verified == []
+    assert remaining == [cand]
+
+
+def test_rejects_when_verifier_errors():
+    cand = _candidate(FEE_ORDER, FEE_PAYOUT, "fee_offset")
+    client = FakeLLMClient([LLMError("down")])
+    verified, remaining = promote([cand], [], client)
+    assert verified == []
+    assert remaining == [cand]
+
+
+def test_no_client_leaves_everything_in_needs_review():
+    cand = _candidate(FEE_ORDER, FEE_PAYOUT, "fee_offset")
+    verified, remaining = promote([cand], [], None)
+    assert verified == []
+    assert remaining == [cand]
+
+
+def test_other_kind_is_never_promoted():
+    cand = _candidate(FEE_ORDER, FEE_PAYOUT, "other")
+    client = FakeLLMClient([{"kind": "other", "confidence": 0.99}])
+    verified, remaining = promote([cand], [], client)
+    assert verified == []
+    assert remaining == [cand]
+    assert client.calls == []  # 'other' predicate is False -> no model call
+
+
+def test_partial_refund_promotes_only_with_a_matching_refund():
+    order = _order("ord_refund", "30.00")
+    payout = _payout("py_2", "18.00", "0.82", "17.18")
+    cand = _candidate(order, payout, "partial_refund")
+    refunds = [RefundLine(ref="ord_refund", amount=Decimal("12.00"), currency="EUR", refund_date=date(2026, 7, 2))]
+    client = FakeLLMClient([{"kind": "partial_refund", "confidence": 0.93}])
+    verified, remaining = promote([cand], refunds, client)
+    assert len(verified) == 1 and remaining == []
+
+
+def test_partial_refund_stays_in_review_without_refunds():
+    order = _order("ord_refund", "30.00")
+    payout = _payout("py_2", "18.00", "0.82", "17.18")
+    cand = _candidate(order, payout, "partial_refund")
+    client = FakeLLMClient([])  # predicate false first -> no call
+    verified, remaining = promote([cand], [], client)
+    assert verified == [] and remaining == [cand]
+    assert client.calls == []

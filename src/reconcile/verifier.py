@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from .llm import LLMClient, LLMError
 from .matcher import KINDS
-from .schema import OrderLine, PayoutLine, RefundLine
+from .schema import CandidateMatch, OrderLine, PayoutLine, RefundLine, VerifiedMatch
 
 # Largest tolerated rounding drift. Above it, not a currency-rounding case.
 ROUNDING_EPSILON = Decimal("0.02")
@@ -116,3 +116,43 @@ def classify(
     if not _is_number(confidence) or not 0.0 <= confidence <= 1.0:
         return None
     return {"kind": kind, "confidence": float(confidence)}
+
+
+def promote(
+    candidates: list[CandidateMatch],
+    refunds: list[RefundLine],
+    client: LLMClient | None,
+) -> tuple[list[VerifiedMatch], list[CandidateMatch]]:
+    """Partition candidates into (verified, still-needs-review).
+
+    A candidate is promoted only when its arithmetic predicate holds AND an
+    independent verifier agrees on the kind above threshold. Every other path
+    leaves it in the review queue.
+    """
+    verified: list[VerifiedMatch] = []
+    remaining: list[CandidateMatch] = []
+
+    for c in candidates:
+        predicate = ARITH.get(c.kind)
+        if predicate is None or not predicate(c.order, c.payout, refunds):
+            remaining.append(c)
+            continue
+        if client is None:
+            remaining.append(c)
+            continue
+        verdict = classify(c.order, c.payout, refunds, client)
+        if verdict is None or verdict["kind"] != c.kind or verdict["confidence"] < VERIFIER_THRESHOLD:
+            remaining.append(c)
+            continue
+        verified.append(
+            VerifiedMatch(
+                order=c.order,
+                payout=c.payout,
+                kind=c.kind,
+                matcher_confidence=c.confidence,
+                verifier_confidence=verdict["confidence"],
+                deterministic_check=c.kind,
+                rationale=c.rationale,
+            )
+        )
+    return verified, remaining
