@@ -1,8 +1,9 @@
 from datetime import date
 from decimal import Decimal
 
+from reconcile.llm import FakeLLMClient, LLMError
 from reconcile.schema import OrderLine, PayoutLine, RefundLine
-from reconcile.verifier import ARITH, ROUNDING_EPSILON, VERIFIER_THRESHOLD
+from reconcile.verifier import ARITH, ROUNDING_EPSILON, VERIFIER_THRESHOLD, classify
 
 
 def _order(order_id, amount, currency="EUR"):
@@ -97,3 +98,32 @@ def test_partial_refund_rejects_mismatched_refund_currency():
     payout = _payout("py_2", "18.00", "0.82", "17.18", currency="EUR")
     refunds = [RefundLine(ref="ord_refund", amount=Decimal("12.00"), currency="USD", refund_date=date(2026, 7, 2))]
     assert ARITH["partial_refund"](order, payout, refunds) is False
+
+
+def test_classify_returns_kind_and_confidence():
+    client = FakeLLMClient([{"kind": "fee_offset", "confidence": 0.95}])
+    out = classify(_order("o", "97.10"), _payout("p", "100.00", "2.90", "97.10"), [], client)
+    assert out == {"kind": "fee_offset", "confidence": 0.95}
+
+
+def test_classify_prompt_never_leaks_matcher_reasoning():
+    client = FakeLLMClient([{"kind": "fee_offset", "confidence": 0.95}])
+    classify(_order("o", "97.10"), _payout("p", "100.00", "2.90", "97.10"), [], client)
+    sent = client.calls[0]["system"] + client.calls[0]["user"]
+    assert "rationale" not in sent.lower()
+    assert "matcher" not in sent.lower()
+
+
+def test_classify_fails_closed_on_llm_error():
+    assert classify(_order("o", "97.10"), _payout("p", "100.00", "2.90", "97.10"), [],
+                    FakeLLMClient([LLMError("boom")])) is None
+
+
+def test_classify_rejects_unknown_kind():
+    assert classify(_order("o", "1"), _payout("p", "1", "0", "1"), [],
+                    FakeLLMClient([{"kind": "bogus", "confidence": 0.99}])) is None
+
+
+def test_classify_rejects_out_of_range_confidence():
+    assert classify(_order("o", "1"), _payout("p", "1", "0", "1"), [],
+                    FakeLLMClient([{"kind": "fee_offset", "confidence": 1.4}])) is None
