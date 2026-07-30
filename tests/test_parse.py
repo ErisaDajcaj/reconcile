@@ -3,8 +3,8 @@ from datetime import date
 
 import pytest
 
-from reconcile.parse import parse_payouts, parse_orders, CsvSchemaError, identity_mapping
-from reconcile.schema import ColumnMapping
+from reconcile.parse import parse_payouts, parse_orders, parse_refunds, CsvSchemaError, identity_mapping, REFUND_COLUMNS
+from reconcile.schema import ColumnMapping, RefundLine
 
 PAYOUTS = "tests/fixtures/payout_basic.csv"
 ORDERS = "tests/fixtures/orders_basic.csv"
@@ -89,3 +89,25 @@ def test_duplicate_header_fails_closed(tmp_path):
 def test_identity_mapping_names_every_field_after_itself():
     mapping = identity_mapping({"order_id", "amount"})
     assert mapping.fields == {"order_id": "order_id", "amount": "amount"}
+
+
+def test_parse_refunds_canonical_headers(tmp_path):
+    p = tmp_path / "refunds.csv"
+    p.write_text("ref,amount,currency,date\nord_refund,12.00,eur,2026-07-02\n", encoding="utf-8")
+    refunds = parse_refunds(p)
+    assert refunds == [RefundLine(ref="ord_refund", amount=Decimal("12.00"),
+                                  currency="EUR", refund_date=date(2026, 7, 2))]
+
+
+def test_parse_refunds_missing_required_column_fails_closed(tmp_path):
+    p = tmp_path / "bad.csv"
+    p.write_text("ref,amount,currency\nord_refund,12.00,EUR\n", encoding="utf-8")
+    try:
+        parse_refunds(p)
+        assert False, "expected CsvSchemaError for missing date column"
+    except CsvSchemaError:
+        pass
+
+
+def test_refund_columns_value():
+    assert REFUND_COLUMNS == {"ref", "amount", "currency", "date"}

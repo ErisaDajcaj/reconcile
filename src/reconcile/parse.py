@@ -3,10 +3,11 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from .schema import ColumnMapping, PayoutLine, OrderLine
+from .schema import ColumnMapping, PayoutLine, OrderLine, RefundLine
 
 PAYOUT_COLUMNS = {"ref", "gross_amount", "fee", "net_amount", "currency", "date"}
 ORDER_COLUMNS = {"order_id", "amount", "currency", "date"}
+REFUND_COLUMNS = {"ref", "amount", "currency", "date"}
 
 
 class CsvSchemaError(ValueError):
@@ -77,6 +78,24 @@ def parse_orders(path, mapping: ColumnMapping | None = None) -> list[OrderLine]:
                 amount=Decimal(_cell(row, mapping, "amount")),
                 currency=_cell(row, mapping, "currency").strip().upper(),
                 order_date=date.fromisoformat(_cell(row, mapping, "date").strip()),
+            )
+        )
+    return out
+
+
+def parse_refunds(path, mapping: ColumnMapping | None = None) -> list[RefundLine]:
+    mapping = mapping or identity_mapping(REFUND_COLUMNS)
+    gen = _rows(path)
+    header, p = next(gen)
+    _require_mapped_columns(header, mapping, REFUND_COLUMNS, p)
+    out = []
+    for row, _ in gen:
+        out.append(
+            RefundLine(
+                ref=_cell(row, mapping, "ref").strip(),
+                amount=Decimal(_cell(row, mapping, "amount")),
+                currency=_cell(row, mapping, "currency").strip().upper(),
+                refund_date=date.fromisoformat(_cell(row, mapping, "date").strip()),
             )
         )
     return out
