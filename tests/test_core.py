@@ -116,8 +116,9 @@ def test_ingest_agent_is_actually_invoked_for_non_canonical_headers():
 
     # Both agents were called, in pipeline order: ingest maps headers before
     # anything else runs, then the matcher proposes over the residual.
-    # (Verifier is also called but fails closed when responses run out.)
-    assert len(client.calls) >= 2
+    # Calls 3-4: verifier classify for fee_offset and currency_rounding candidates
+    # (partial_refund skipped: no refunds); verifier_client defaults to client.
+    assert len(client.calls) == 4
     assert "mapping" in client.calls[0]["schema"]["properties"]
     assert "proposals" in client.calls[1]["schema"]["properties"]
 
@@ -176,6 +177,7 @@ def test_verifier_client_defaults_to_client(tmp_path):
 
 
 def test_plan_1_path_unchanged_no_verified(tmp_path):
-    # no client at all -> pure deterministic, empty verified
+    # no client at all -> pure deterministic, empty verified AND empty needs_review
     report = reconcile_files(PAYOUTS, ORDERS)
     assert report.verified == []
+    assert report.needs_review == []
