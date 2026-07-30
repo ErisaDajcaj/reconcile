@@ -116,7 +116,8 @@ def test_ingest_agent_is_actually_invoked_for_non_canonical_headers():
 
     # Both agents were called, in pipeline order: ingest maps headers before
     # anything else runs, then the matcher proposes over the residual.
-    assert len(client.calls) == 2
+    # (Verifier is also called but fails closed when responses run out.)
+    assert len(client.calls) >= 2
     assert "mapping" in client.calls[0]["schema"]["properties"]
     assert "proposals" in client.calls[1]["schema"]["properties"]
 
@@ -130,3 +131,51 @@ def test_ingest_agent_is_actually_invoked_for_non_canonical_headers():
 
     proposed = {(c.order.order_id, c.payout.ref) for c in report.needs_review}
     assert proposed == {("ord_fee", "py_1"), ("ord_refund", "py_2"), ("ord_round", "py_3")}
+
+
+def test_verifier_promotes_a_fee_offset_candidate(tmp_path):
+    payout = tmp_path / "p.csv"
+    payout.write_text(
+        "ref,gross_amount,fee,net_amount,currency,date\n"
+        "py_1,100.00,2.90,97.10,EUR,2026-07-02\n", encoding="utf-8")
+    orders = tmp_path / "o.csv"
+    orders.write_text(
+        "order_id,amount,currency,date\n"
+        "ord_fee,97.10,EUR,2026-07-02\n", encoding="utf-8")
+    # matcher proposes the pair; verifier confirms fee_offset
+    matcher_client = FakeLLMClient([{
+        "proposals": [{"order_index": 0, "payout_index": 0, "confidence": 0.9,
+                       "rationale": "net vs gross", "kind": "fee_offset"}]
+    }])
+    verifier_client = FakeLLMClient([{"kind": "fee_offset", "confidence": 0.95}])
+    report = reconcile_files(payout, orders, client=matcher_client, verifier_client=verifier_client)
+    assert len(report.verified) == 1
+    assert report.verified[0].kind == "fee_offset"
+    assert report.needs_review == []
+    assert report.matched == []  # promotion never touches the deterministic tier
+
+
+def test_verifier_client_defaults_to_client(tmp_path):
+    # With only `client` given, it drives BOTH matcher and verifier. Feed the
+    # single client a matcher response then a verdict, in call order.
+    payout = tmp_path / "p.csv"
+    payout.write_text(
+        "ref,gross_amount,fee,net_amount,currency,date\n"
+        "py_1,100.00,2.90,97.10,EUR,2026-07-02\n", encoding="utf-8")
+    orders = tmp_path / "o.csv"
+    orders.write_text(
+        "order_id,amount,currency,date\n"
+        "ord_fee,97.10,EUR,2026-07-02\n", encoding="utf-8")
+    client = FakeLLMClient([
+        {"proposals": [{"order_index": 0, "payout_index": 0, "confidence": 0.9,
+                        "rationale": "net vs gross", "kind": "fee_offset"}]},
+        {"kind": "fee_offset", "confidence": 0.95},
+    ])
+    report = reconcile_files(payout, orders, client=client)
+    assert len(report.verified) == 1  # verifier_client defaulted to client
+
+
+def test_plan_1_path_unchanged_no_verified(tmp_path):
+    # no client at all -> pure deterministic, empty verified
+    report = reconcile_files(PAYOUTS, ORDERS)
+    assert report.verified == []
