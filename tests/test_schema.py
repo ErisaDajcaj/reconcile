@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from reconcile.schema import PayoutLine, OrderLine
+from reconcile.schema import PayoutLine, OrderLine, RefundLine, VerifiedMatch
 
 
 def test_payout_line_is_frozen_and_typed():
@@ -44,3 +44,30 @@ def test_column_mapping_is_frozen():
     assert mapping.fields["order_id"] == "Order Reference"
     with pytest.raises(FrozenInstanceError):
         mapping.fields = {}
+
+
+def test_refund_line_is_a_frozen_typed_record():
+    r = RefundLine(ref="ord_refund", amount=Decimal("12.00"), currency="EUR", refund_date=date(2026, 7, 2))
+    assert r.ref == "ord_refund"
+    assert r.amount == Decimal("12.00")
+    assert r.currency == "EUR"
+    assert r.refund_date == date(2026, 7, 2)
+    try:
+        r.amount = Decimal("0")
+        assert False, "RefundLine should be frozen"
+    except AttributeError:
+        pass
+
+
+def test_verified_match_carries_its_audit_trail():
+    order = OrderLine(order_id="ord_fee", amount=Decimal("97.10"), currency="EUR", order_date=date(2026, 7, 2))
+    payout = PayoutLine(ref="py_1", gross_amount=Decimal("100.00"), fee=Decimal("2.90"),
+                        net_amount=Decimal("97.10"), currency="EUR", line_date=date(2026, 7, 2))
+    v = VerifiedMatch(order=order, payout=payout, kind="fee_offset",
+                      matcher_confidence=0.91, verifier_confidence=0.95,
+                      deterministic_check="fee_offset", rationale="net vs gross")
+    assert v.kind == "fee_offset"
+    assert v.matcher_confidence == 0.91
+    assert v.verifier_confidence == 0.95
+    assert v.deterministic_check == "fee_offset"
+    assert v.rationale == "net vs gross"
