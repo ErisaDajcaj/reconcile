@@ -1,0 +1,5 @@
+[
+  {"order_id": "ord_fee",    "payout_ref": "py_1", "kind": "fee_offset"},
+  {"order_id": "ord_refund", "payout_ref": "py_2", "kind": "partial_refund"},
+  {"order_id": "ord_round",  "payout_ref": "py_3", "kind": "currency_rounding"}
+]

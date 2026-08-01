@@ -41,3 +41,29 @@ class CandidateMatch:
     confidence: float
     rationale: str
     kind: str
+
+
+@dataclass(frozen=True)
+class RefundLine:
+    ref: str
+    amount: Decimal
+    currency: str
+    refund_date: date
+
+
+@dataclass(frozen=True)
+class VerifiedMatch:
+    """A candidate promoted out of `needs_review` by the verifier.
+
+    Carries its own audit trail: which arithmetic predicate confirmed it
+    (`deterministic_check`), both independent confidence votes, and the
+    matcher's rationale.
+    """
+
+    order: OrderLine
+    payout: PayoutLine
+    kind: str
+    matcher_confidence: float
+    verifier_confidence: float
+    deterministic_check: str
+    rationale: str

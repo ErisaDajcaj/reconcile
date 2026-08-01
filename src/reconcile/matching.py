@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from .schema import CandidateMatch, PayoutLine, OrderLine
+from .schema import CandidateMatch, PayoutLine, OrderLine, VerifiedMatch
 
 
 @dataclass
@@ -11,6 +11,9 @@ class ReconcileReport:
     # Candidate pairings over the residual. Never auto-confirmed: promoting one
     # into `matched` is the Plan 3 verifier's job.
     needs_review: list[CandidateMatch] = field(default_factory=list)
+    # Candidates promoted by the verifier (Plan 3). Distinct from `matched`,
+    # which stays deterministic-exact-only.
+    verified: list[VerifiedMatch] = field(default_factory=list)
 
 
 def _key(order_id: str, amount, currency: str) -> tuple:

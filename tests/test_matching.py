@@ -58,3 +58,20 @@ def test_report_starts_with_an_empty_review_queue():
 
     report = ReconcileReport()
     assert report.needs_review == []
+
+
+def test_report_has_an_empty_verified_list_by_default():
+    report = ReconcileReport()
+    assert report.verified == []
+
+
+def test_deterministic_match_leaves_verified_empty():
+    from datetime import date
+    from decimal import Decimal
+    from reconcile.matching import deterministic_match
+    from reconcile.schema import OrderLine, PayoutLine
+    orders = [OrderLine(order_id="a", amount=Decimal("1.00"), currency="EUR", order_date=date(2026, 7, 2))]
+    payouts = [PayoutLine(ref="a", gross_amount=Decimal("1.00"), fee=Decimal("0"),
+                          net_amount=Decimal("1.00"), currency="EUR", line_date=date(2026, 7, 2))]
+    report = deterministic_match(orders, payouts)
+    assert report.verified == []
